@@ -31,7 +31,7 @@ The model is trained on the Fer 2013 dataset, which contains grayscale images of
 3. Set up YouTube Data API credentials. Instructions can be found [here](https://developers.google.com/youtube/registering_an_application).
 
 ## Usage
-1. Train the model using `train_model.py`.
+1. Train the model using `FER_model.py`.
 2. Run the Streamlit app:
    ```
    streamlit run app.py
