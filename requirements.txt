@@ -1,0 +1,6 @@
+pytube
+torch
+torchvision
+opencv-python-headless
+streamlit
+numpy
