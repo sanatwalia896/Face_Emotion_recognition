@@ -21,8 +21,7 @@ The model is trained on the Fer 2013 dataset, which contains grayscale images of
 ## Installation
 1. Clone the repository:
    ```
-   [git clone https://github.com/yourusername/facial-emotion-recognition.git](https://github.com/sanatwalia896/My_Projects)
-   cd new4.py
+   git clone https://github.com/sanatwalia896/Face_Emotion_recognition
    ```
 2. Install dependencies:
    ```
