@@ -37,7 +37,7 @@ class Deep_Emotion(nn.Module):
 
 # Load the trained model
 model = Deep_Emotion()
-model.load_state_dict(torch.load('/Users/sanatwalia/Downloads/Face_Emotion_Recognition_2.pth', map_location=torch.device('cpu')))
+model.load_state_dict(torch.load('Face_Emotion_Recognition_2.pth', map_location=torch.device('cpu')))
 model.eval()
 
 # Define the emotions
