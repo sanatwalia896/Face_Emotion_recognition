@@ -1,3 +1,5 @@
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+import av
 import streamlit as st
 import cv2
 import torch
@@ -5,8 +7,9 @@ from torchvision import transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import time
 
-# ---------------------- Custom CSS ----------------------
+# Custom CSS for enhanced styling
 st.markdown("""
     <style>
     .main-container {
@@ -44,6 +47,11 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         margin-top: 20px;
     }
+    .video-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
     .iframe-container {
         border-radius: 10px;
         overflow: hidden;
@@ -52,7 +60,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------------- Model Definition ----------------------
+# Load model
 class Deep_Emotion(nn.Module):
     def __init__(self):
         super(Deep_Emotion, self).__init__()
@@ -74,16 +82,14 @@ class Deep_Emotion(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
         x = F.relu(self.fc2(x))
-        x = self.dropout(x)
+        x = self.dropdown(x)
         x = self.fc3(x)
         return x
 
-# Load model
 model = Deep_Emotion()
 model.load_state_dict(torch.load('Face_Emotion_Recognition_2.pth', map_location=torch.device('cpu')))
 model.eval()
 
-# ---------------------- Helpers ----------------------
 emotions = {
     0: "Angry 😣", 1: "Disgust 😖", 2: "Fear 😨", 3: "Happy 😊",
     4: "Sad 😔", 5: "Surprise 😲", 6: "Neutral 😐"
@@ -98,6 +104,62 @@ transform = transforms.Compose([
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
+# Placeholder for UI functions (assuming they exist)
+def show_happiness_features(key):
+    st.markdown(f"<div class='emotion-card'>😊 Happiness detected! Enjoy some positive content!</div>", unsafe_allow_html=True)
+
+def show_sadness_support(key):
+    st.markdown(f"<div class='emotion-card'>😔 Feeling sad? Here's some support for you.</div>", unsafe_allow_html=True)
+
+def show_neutral_quiz(key):
+    st.markdown(f"<div class='emotion-card'>😐 Neutral vibe? Try this fun quiz!</div>", unsafe_allow_html=True)
+
+def show_anger_support(key):
+    st.markdown(f"<div class='emotion-card'>😠 Feeling angry? Let's cool down with some tips.</div>", unsafe_allow_html=True)
+
+def show_disgust_support(key):
+    st.markdown(f"<div class='emotion-card'>😖 Disgusted? Here's something to lighten the mood.</div>", unsafe_allow_html=True)
+
+def show_fear_support(key):
+    st.markdown(f"<div class='emotion-card'>😨 Feeling scared? Find some calming resources here.</div>", unsafe_allow_html=True)
+
+def show_surprise_support(key):
+    st.markdown(f"<div class='emotion-card'>😲 Surprised? Check out this exciting content!</div>", unsafe_allow_html=True)
+
+# Emotion UI display
+def show_emotion_quiz(emotion, key):
+    emotion_functions = {
+        "Happy 😊": show_happiness_features,
+        "Sad 😔": show_sadness_support,
+        "Neutral 😐": show_neutral_quiz,
+        "Angry 😣": show_anger_support,
+        "Disgust 😖": show_disgust_support,
+        "Fear 😨": show_fear_support,
+        "Surprise 😲": show_surprise_support
+    }
+    if emotion in emotion_functions:
+        emotion_functions[emotion](key)
+
+# Video processor class for webrtc
+class EmotionProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.last_advice_time = time.time()
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        faces = face_cascade.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 5)
+        for (x, y, w, h) in faces:
+            roi = img[y:y+h, x:x+w]
+            if roi.size != 0:
+                emotion = predict_emotion(roi)
+                cv2.putText(img, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                if time.time() - self.last_advice_time > 15:
+                    self.last_advice_time = time.time()
+                    st.session_state['last_emotion'] = (emotion, self.last_advice_time)
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+# Emotion predictor
 def predict_emotion(face_img):
     face_tensor = transform(face_img).unsqueeze(0)
     with torch.no_grad():
@@ -105,51 +167,18 @@ def predict_emotion(face_img):
         _, predicted = torch.max(outputs.data, 1)
     return emotions[predicted.item()]
 
-# ---------------------- Emotion Cards ----------------------
-def show_card(message, emoji):
-    st.markdown(f"<div class='emotion-card'>{emoji} {message}</div>", unsafe_allow_html=True)
+# Webcam capture
+def capture_webcam():
+    webrtc_streamer(
+        key="emotion",
+        video_processor_factory=EmotionProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        rtc_configuration={
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+        }
+    )
 
-def show_emotion_quiz(emotion):
-    cards = {
-        "Happy 😊": ("Happiness detected! Enjoy some positive content!", "😊"),
-        "Sad 😔": ("Feeling sad? Here's some support for you.", "😔"),
-        "Neutral 😐": ("Neutral vibe? Try this fun quiz!", "😐"),
-        "Angry 😣": ("Feeling angry? Let's cool down with some tips.", "😣"),
-        "Disgust 😖": ("Disgusted? Here's something to lighten the mood.", "😖"),
-        "Fear 😨": ("Feeling scared? Find some calming resources here.", "😨"),
-        "Surprise 😲": ("Surprised? Check out this exciting content!", "😲")
-    }
-    if emotion in cards:
-        msg, emoji = cards[emotion]
-        show_card(msg, emoji)
-
-# ---------------------- Camera Input (Streamlit Cloud Safe) ----------------------
-def capture_with_camera():
-    img_file = st.camera_input("Take a picture with your webcam")
-
-    if img_file is not None:
-        file_bytes = np.asarray(bytearray(img_file.getvalue()), dtype=np.uint8)
-        frame = cv2.imdecode(file_bytes, 1)
-
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-
-        if len(faces) == 0:
-            st.warning("No face detected. Try again!")
-        else:
-            for (x, y, w, h) in faces:
-                roi = frame[y:y+h, x:x+w]
-                if roi.size != 0:
-                    emotion = predict_emotion(roi)
-                    cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.9, (0, 255, 0), 2)
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
-                    st.session_state['last_emotion'] = emotion
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        st.image(frame, caption="Detected Emotion(s)", use_column_width=True)
-
-# ---------------------- YouTube Embed ----------------------
+# YouTube video embed
 def stream_video(youtube_link):
     video_id = youtube_link.split("v=")[-1].split("&")[0] if "v=" in youtube_link else youtube_link.split("/")[-1]
     st.markdown(f"""
@@ -158,39 +187,46 @@ def stream_video(youtube_link):
         </div>
     """, unsafe_allow_html=True)
 
-# ---------------------- Main App ----------------------
+# Main app
 def main():
     st.markdown("<h1 class='title'>Face Emotion Recognition App</h1>", unsafe_allow_html=True)
-
-    # Sidebar
+    
+    # Sidebar for user input
     with st.sidebar:
         st.header("Control Panel")
         youtube_link = st.text_input("Enter YouTube Video Link:", placeholder="e.g., https://www.youtube.com/watch?v=...")
         if youtube_link:
-            st.session_state['youtube_link'] = youtube_link
+            if st.button("Load Video"):
+                st.session_state['youtube_link'] = youtube_link
 
+    # Main content
     with st.container():
         st.markdown("<div class='main-container'>", unsafe_allow_html=True)
-
+        
+        # Layout with columns
         col1, col2 = st.columns([2, 1])
-
+        
         with col1:
-            st.subheader("📸 Capture with Camera")
-            capture_with_camera()
-
+            st.subheader("Live Webcam Feed")
+            st.markdown("<div class='video-container'>", unsafe_allow_html=True)
+            capture_webcam()
+            st.markdown("</div>", unsafe_allow_html=True)
+        
         with col2:
             st.subheader("Detected Emotion")
             if 'last_emotion' in st.session_state:
-                show_emotion_quiz(st.session_state['last_emotion'])
+                emotion, key = st.session_state['last_emotion']
+                show_emotion_quiz(emotion, str(key))
             else:
                 st.markdown("<div class='emotion-card'>Waiting for emotion detection...</div>", unsafe_allow_html=True)
 
+        # Display YouTube video if link is provided
         if 'youtube_link' in st.session_state:
             st.subheader("Recommended Video")
             stream_video(st.session_state['youtube_link'])
         else:
             st.warning("Enter a YouTube link in the sidebar to watch a video.")
-
+        
         st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
