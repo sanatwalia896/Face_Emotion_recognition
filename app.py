@@ -5,7 +5,6 @@ from torchvision import transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import time
 
 # ---------------------- Custom CSS ----------------------
 st.markdown("""
@@ -45,11 +44,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         margin-top: 20px;
     }
-    .video-container {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 20px;
-    }
     .iframe-container {
         border-radius: 10px;
         overflow: hidden;
@@ -84,6 +78,7 @@ class Deep_Emotion(nn.Module):
         x = self.fc3(x)
         return x
 
+# Load model
 model = Deep_Emotion()
 model.load_state_dict(torch.load('Face_Emotion_Recognition_2.pth', map_location=torch.device('cpu')))
 model.eval()
@@ -128,38 +123,31 @@ def show_emotion_quiz(emotion):
         msg, emoji = cards[emotion]
         show_card(msg, emoji)
 
-# ---------------------- Webcam (No WebRTC) ----------------------
-def capture_webcam():
-    run = st.checkbox("▶️ Start Camera")
-    FRAME_WINDOW = st.image([])
+# ---------------------- Camera Input (Streamlit Cloud Safe) ----------------------
+def capture_with_camera():
+    img_file = st.camera_input("Take a picture with your webcam")
 
-    camera = None
-    if run:
-        camera = cv2.VideoCapture(0)
-
-    while run:
-        ret, frame = camera.read()
-        if not ret:
-            st.error("Failed to capture video")
-            break
+    if img_file is not None:
+        file_bytes = np.asarray(bytearray(img_file.getvalue()), dtype=np.uint8)
+        frame = cv2.imdecode(file_bytes, 1)
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
-        for (x, y, w, h) in faces:
-            roi = frame[y:y+h, x:x+w]
-            if roi.size != 0:
-                emotion = predict_emotion(roi)
-                cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.9, (0, 255, 0), 2)
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
-                st.session_state['last_emotion'] = emotion
+        if len(faces) == 0:
+            st.warning("No face detected. Try again!")
+        else:
+            for (x, y, w, h) in faces:
+                roi = frame[y:y+h, x:x+w]
+                if roi.size != 0:
+                    emotion = predict_emotion(roi)
+                    cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.9, (0, 255, 0), 2)
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                    st.session_state['last_emotion'] = emotion
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        FRAME_WINDOW.image(frame)
-
-    if camera:
-        camera.release()
+        st.image(frame, caption="Detected Emotion(s)", use_column_width=True)
 
 # ---------------------- YouTube Embed ----------------------
 def stream_video(youtube_link):
@@ -187,8 +175,8 @@ def main():
         col1, col2 = st.columns([2, 1])
 
         with col1:
-            st.subheader("Live Webcam Feed")
-            capture_webcam()
+            st.subheader("📸 Capture with Camera")
+            capture_with_camera()
 
         with col2:
             st.subheader("Detected Emotion")
